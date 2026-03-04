@@ -1,93 +1,87 @@
 # Tumor Type Prediction
 
-Классификация типа опухоли по матрице экспрессии генов (RNA-seq / gene expression) с использованием:
-- classical ML (LogReg, LinearSVC, ExtraTrees, HistGradientBoosting)
-- SMOTE внутри CV-пайплайна
-- 1D-CNN (PyTorch) для табличных векторов экспрессии
+Классификация типа опухоли по матрице экспрессии генов (RNA-seq / gene expression).
+
+Текущая версия проекта использует **classical ML**:
+- `LogisticRegression`
+- `LinearSVC`
+- `ExtraTreesClassifier`
+- `HistGradientBoostingClassifier`
+
+С дисбалансом классов работаем через **SMOTE внутри CV-пайплайна**.
 
 ## Данные
 
-В проекте используются файлы:
-- `data.csv` — матрица экспрессии (samples x genes)
-- `labels.csv` — тип опухоли (`Class`) для каждого sample
+- `data.csv` — матрица экспрессии (`samples x genes`)
+- `labels.csv` — целевые метки (`Class`) для образцов
 
-> `data.csv` большой и хранится через Git LFS.
+`data.csv` большой и хранится через Git LFS.
 
-## Что реализовано
+## Что есть в ноутбуке
 
-### 1) Формирование признаков
+Файл: `tumor_type_prediction_smote_pipeline.ipynb`
 
-В проект добавлен модуль [`feature_utils.py`](feature_utils.py) с тремя типами признаков:
+### 1) Подготовка данных
+- чтение `data.csv` и `labels.csv`
+- маппинг по `sample_id`
+- формирование `X`/`y` и train/test split
 
-1. `build_morgan_fingerprints(...)`
-- для молекул (SMILES)
-- Morgan fingerprints (RDKit)
+### 2) Препроцессинг и отбор признаков
+- `SimpleImputer(strategy="median")`
+- `StandardScaler()`
+- `VarianceThreshold`
+- `SelectKBest(f_classif)`
+- подбор `kbest__k` через `GridSearchCV`
 
-2. `build_kmer_features(...)`
-- для ДНК/белков
-- k-mer частоты (нормированные или абсолютные)
+### 3) Обучение моделей
+- единый `imblearn.Pipeline`: `preprocess -> var -> kbest -> smote -> model`
+- 5-fold `StratifiedKFold`
+- метрика подбора: `f1_macro`
 
-3. `build_expression_features(...)`
-- для gene-expression
-- численные векторы признаков из табличных данных
+### 4) Финальная оценка моделей
+Для каждой модели на test считаются:
+- `Accuracy (Top-1)`
+- `Precision (macro)`
+- `Recall (macro)`
+- `F1 (macro)`
+- `Balanced Accuracy`
+- `MCC`
 
-### 2) Метрики и финальная оценка моделей
+Плюс визуализации:
+- confusion matrix (counts)
+- confusion matrix, нормированная по строкам
 
-В ноутбуке считается единый набор метрик для всех моделей (включая CNN):
-- **Top-1 Accuracy**
-- **Precision (macro)**
-- **Recall (macro)**
-- **F1 (macro)**
-- **Balanced Accuracy**
-- MCC (дополнительно)
+Также формируется таблица сравнения `metrics_df`.
 
-### 3) Визуализации
+### 5) Важность признаков
+Секция важности признаков использует `feature_utils.py`.
 
-В ноутбуке строятся:
-- Confusion matrix (counts)
-- Confusion matrix, нормированная по строкам
-- График per-class precision/recall/f1
-- Топ ошибок классов (`true -> pred`)
-- Анализ confidence/reliability
-- График важности признаков (для моделей с `coef_` или `feature_importances_`)
+## Модуль `feature_utils.py`
 
-### 4) Таблица сравнения моделей
+Текущая версия содержит функции:
+- `get_feature_importance(estimator, feature_names)`
+- `plot_top_feature_importance(estimator, feature_names, top_n=25, title=...)`
 
-Формируется сводная таблица `metrics_df` и сохраняется в:
-- `artifacts/model_metrics_comparison.csv`
-
-## Структура проекта
-
-- `tumor_type_prediction_smote_pipeline.ipynb` — основной pipeline и анализ
-- `feature_utils.py` — feature engineering + feature importance helpers
-- `data.csv` — матрица экспрессии
-- `labels.csv` — метки классов
-- `artifacts/` — сохранённые модели и метрики
+Поддерживаются модели с:
+- `coef_` (линейные)
+- `feature_importances_` (деревья/ансамбли)
 
 ## Установка
 
 ```bash
-pip install -U pandas numpy scikit-learn imbalanced-learn matplotlib joblib torch
-```
-
-Опционально для molecular fingerprints:
-
-```bash
-pip install rdkit
+pip install -U pandas numpy scikit-learn imbalanced-learn matplotlib joblib
 ```
 
 ## Запуск
 
 1. Откройте `tumor_type_prediction_smote_pipeline.ipynb`.
 2. Выполните ячейки сверху вниз.
-3. В блоке финальной оценки получите:
-- таблицу сравнения всех моделей
-- confusion matrices для каждой модели
-- лучшую модель по `f1_macro`
+3. В финальных ячейках получите:
+- таблицу сравнения моделей (`metrics_df`)
+- confusion matrix (обычную и нормированную) для каждой модели
+- график топ-важных признаков для выбранной модели
 
 ## Работа с Git LFS
-
-Если клонируете репозиторий:
 
 ```bash
 git lfs install
@@ -95,13 +89,3 @@ git clone <repo_url>
 cd Tumor_type_prediction
 git lfs pull
 ```
-
-## Артефакты
-
-После выполнения ноутбука сохраняются:
-- `artifacts/best_classical_model.joblib`
-- `artifacts/label_encoder.joblib`
-- `artifacts/model_metrics_comparison.csv`
-- `artifacts/cnn_1d_state_dict.pt` (если CNN обучалась)
-- `artifacts/cnn_pre_var_pipeline.joblib`
-- `artifacts/cnn_kbest.joblib`
