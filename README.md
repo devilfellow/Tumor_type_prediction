@@ -15,8 +15,6 @@
 - `data.csv` — матрица экспрессии (`samples x genes`)
 - `labels.csv` — целевые метки (`Class`) для образцов
 
-`data.csv` большой и хранится через Git LFS.
-
 ## Что есть в ноутбуке
 
 Файл: `tumor_type_prediction_smote_pipeline.ipynb`
